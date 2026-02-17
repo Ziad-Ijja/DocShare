@@ -7,6 +7,9 @@ import { upload as uploadToBlob } from "@vercel/blob/client";
 const MAX_SIZE_BYTES =
   Number(process.env.NEXT_PUBLIC_MAX_VIDEO_SIZE_MB ?? "1024") * 1024 * 1024;
 
+const VIDEO_EXT = /\.(mp4|mov|webm|mkv|avi)$/i;
+const ARCHIVE_EXT = /\.(zip|rar)$/i;
+
 export default function Upload() {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -17,6 +20,10 @@ export default function Upload() {
 
   const handleFile = useCallback((f: File) => {
     setError("");
+    if (!VIDEO_EXT.test(f.name) && !ARCHIVE_EXT.test(f.name)) {
+      setError("Seuls les fichiers vidéo, .zip et .rar sont acceptés.");
+      return;
+    }
     if (f.size > MAX_SIZE_BYTES) {
       setError(
         `Le fichier dépasse la limite de ${Math.round(MAX_SIZE_BYTES / (1024 * 1024))} Mo.`
@@ -50,7 +57,10 @@ export default function Upload() {
     setProgress(0);
 
     try {
-      await uploadToBlob(file.name, file, {
+      const isArchive = ARCHIVE_EXT.test(file.name);
+      const pathname = `${isArchive ? "archives" : "videos"}/${file.name}`;
+
+      await uploadToBlob(pathname, file, {
         access: "public",
         handleUploadUrl: "/api/upload/afa03c1d-ff92-4aae-b25d-ebbc53475fbb",
         multipart: true,
@@ -142,7 +152,7 @@ export default function Upload() {
                 href="/"
                 className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
               >
-                Voir les vidéos
+                Voir les fichiers
               </Link>
             </div>
           </div>
@@ -188,16 +198,16 @@ export default function Upload() {
               </div>
               <div>
                 <p className="text-sm font-medium text-zinc-200">
-                  Glissez votre vidéo ici ou <span className="text-indigo-400">parcourir</span>
+                  Glissez votre fichier ici ou <span className="text-indigo-400">parcourir</span>
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Formats vidéo &bull; Max {Math.round(MAX_SIZE_BYTES / (1024 * 1024))} Mo
+                  Vidéos, ZIP, RAR &bull; Max {Math.round(MAX_SIZE_BYTES / (1024 * 1024))} Mo
                 </p>
               </div>
               <input
                 ref={inputRef}
                 type="file"
-                accept="video/*"
+                accept="video/*,.zip,.rar,application/zip,application/x-rar-compressed"
                 className="hidden"
                 onChange={onFileChange}
               />
@@ -286,7 +296,7 @@ export default function Upload() {
               disabled={!file || progress !== null}
               className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {progress !== null ? "Upload en cours…" : "Envoyer la vidéo"}
+              {progress !== null ? "Upload en cours…" : "Envoyer le fichier"}
             </button>
           </div>
         )}

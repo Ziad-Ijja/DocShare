@@ -1,22 +1,22 @@
 import { getRedis } from "@/app/lib/redis";
 import { del, list } from "@vercel/blob";
 
-const VIDEO_PATH = /^videos\/.+\.(mp4|mov|webm|mkv|avi)$/i;
+const ARCHIVE_PATH = /^archives\/.+\.(zip|rar)$/i;
 
 export async function GET() {
   try {
     const redis = await getRedis();
-    const raw = await redis.get("videos");
-    const videos: Array<{ url: string; createdAt: number; size: number; pathname: string }> = raw ? JSON.parse(raw) : [];
-    return Response.json(videos);
+    const raw = await redis.get("archives");
+    const archives: Array<{ url: string; createdAt: number; size: number; pathname: string }> = raw ? JSON.parse(raw) : [];
+    return Response.json(archives);
   } catch (e) {
     console.error("Redis error:", e);
 
     try {
       const { blobs } = await list();
 
-      const videos = blobs
-        .filter((b) => VIDEO_PATH.test(b.pathname))
+      const archives = blobs
+        .filter((b) => ARCHIVE_PATH.test(b.pathname))
         .sort(
           (a, b) =>
             new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
@@ -29,7 +29,7 @@ export async function GET() {
           pathname: b.pathname,
         }));
 
-      return Response.json(videos);
+      return Response.json(archives);
     } catch {
       return Response.json([]);
     }
@@ -46,8 +46,8 @@ export async function DELETE(req: Request) {
     await del(url);
 
     const { blobs } = await list();
-    const videos = blobs
-      .filter((b) => VIDEO_PATH.test(b.pathname))
+    const archives = blobs
+      .filter((b) => ARCHIVE_PATH.test(b.pathname))
       .sort(
         (a, b) =>
           new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
@@ -62,14 +62,14 @@ export async function DELETE(req: Request) {
 
     try {
       const redis = await getRedis();
-      await redis.set("videos", JSON.stringify(videos));
+      await redis.set("archives", JSON.stringify(archives));
     } catch (e) {
       console.error("Redis sync error:", e);
     }
 
-    return Response.json(videos);
+    return Response.json(archives);
   } catch (error) {
-    console.error("Video delete error:", error);
+    console.error("Archive delete error:", error);
     return Response.json({ error: "Delete failed" }, { status: 400 });
   }
 }
