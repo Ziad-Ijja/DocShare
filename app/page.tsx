@@ -1,8 +1,15 @@
-import { kv } from "@vercel/kv";
+"use client";
 
-export default async function Home() {
+import { useEffect, useState } from "react";
 
-  const videos:any[] = (await kv.get("videos")) || [];
+export default function Home() {
+  const [videos, setVideos] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/videos")
+      .then(r => r.json())
+      .then(setVideos);
+  }, []);
 
   return (
     <main className="p-10">
