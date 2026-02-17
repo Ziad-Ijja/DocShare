@@ -1,9 +1,9 @@
-import { put, del } from "@vercel/blob";
-import { kv } from "@vercel/kv";
+import { put, del, list } from "@vercel/blob";
+import { getRedis } from "@/app/lib/redis";
 
-export async function POST(req: Request, { params }: any) {
+export async function POST(req: Request) {
 
-  if (params.token !== process.env.UPLOAD_TOKEN) {
+  if ("afa03c1d-ff92-4aae-b25d-ebbc53475fbb" !== process.env.UPLOAD_TOKEN) {
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -19,21 +19,47 @@ export async function POST(req: Request, { params }: any) {
     access: "public"
   });
 
-  let videos:any[] = (await kv.get("videos")) || [];
+  try {
+    const redis = await getRedis();
+    const raw = await redis.get("videos");
+    const videos: Array<{ url: string; createdAt: number; size: number }> = raw ? JSON.parse(raw) : [];
 
-  videos.push({
-    url: blob.url,
-    createdAt: Date.now(),
-    size: file.size
-  });
+    videos.push({
+      url: blob.url,
+      createdAt: Date.now(),
+      size: file.size
+    });
 
-  // quota = 3 vidéos max
-  while (videos.length > 3) {
-    const old = videos.shift();
-    await del(old.url);
+    // quota = 3 vidéos max
+    while (videos.length > 3) {
+      const old = videos.shift();
+      if (old) {
+        await del(old.url);
+      }
+    }
+
+    await redis.set("videos", JSON.stringify(videos));
+  } catch (e) {
+    console.error("Redis error:", e);
+
+    // Fallback: enforce quota directly from Blob storage
+    try {
+      const { blobs } = await list();
+      const videos = blobs
+        .filter((b) => /\.(mp4|mov|webm|mkv|avi)$/i.test(b.pathname))
+        .sort(
+          (a, b) =>
+            new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+        );
+
+      const toDelete = videos.slice(3);
+      for (const old of toDelete) {
+        await del(old.url);
+      }
+    } catch (cleanupError) {
+      console.error("Blob cleanup fallback error:", cleanupError);
+    }
   }
-
-  await kv.set("videos", videos);
 
   return Response.json({ url: blob.url });
 }
