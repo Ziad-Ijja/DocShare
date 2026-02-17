@@ -12,20 +12,16 @@ export async function getRedis(): Promise<RedisClientType> {
     const url = process.env.REDIS_URL;
     if (!url) throw new Error("REDIS_URL is not set");
 
-    // Vercel Redis uses TLS — swap redis:// → rediss://
-    const tlsUrl = url.replace(/^redis:\/\//, "rediss://");
-
     const c =
       client ??
       createClient({
-      url: tlsUrl,
-      socket: {
-        tls: true,
-        rejectUnauthorized: false,
-        connectTimeout: 10_000,
-        reconnectStrategy: () => false,
-      },
-    });
+        // Keep the URL protocol as provided (redis:// or rediss://)
+        url,
+        socket: {
+          connectTimeout: 10_000,
+          reconnectStrategy: () => false,
+        },
+      });
 
     if (!client) {
       c.on("error", (err) => console.error("Redis error:", err));
