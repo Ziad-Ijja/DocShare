@@ -25,6 +25,22 @@ export default function Home() {
   const [deletingArchiveUrl, setDeletingArchiveUrl] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
 
+  const formatAddedDate = useCallback((timestamp: number) => {
+    return new Date(timestamp).toLocaleString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }, []);
+
+  const getFileType = useCallback((pathname?: string, url?: string) => {
+    const source = pathname ?? url ?? "";
+    const match = source.match(/\.([a-z0-9]+)(?:$|\?)/i);
+    return match ? match[1].toUpperCase() : "Fichier";
+  }, []);
+
   const loadData = useCallback(async () => {
     const [videosRes, archivesRes] = await Promise.all([
       fetch("/api/video"),
@@ -182,20 +198,25 @@ export default function Home() {
                   >
                     <source src={v.url} />
                   </video>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <span className="text-sm text-zinc-300">Vidéo {i + 1}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-zinc-500">
-                        {(v.size / (1024 * 1024)).toFixed(1)} Mo
-                      </span>
-                      <button
-                        onClick={() => deleteVideo(v.url)}
-                        disabled={deletingVideoUrl === v.url}
-                        className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 transition hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {deletingVideoUrl === v.url ? "Suppression..." : "Supprimer"}
-                      </button>
+                  <div className="px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-zinc-300">Vidéo {i + 1}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-zinc-500">
+                          {(v.size / (1024 * 1024)).toFixed(1)} Mo
+                        </span>
+                        <button
+                          onClick={() => deleteVideo(v.url)}
+                          disabled={deletingVideoUrl === v.url}
+                          className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 transition hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {deletingVideoUrl === v.url ? "Suppression..." : "Supprimer"}
+                        </button>
+                      </div>
                     </div>
+                    <p className="mt-2 text-xs text-zinc-500">
+                      Ajouté le {formatAddedDate(v.createdAt)} &bull; Type: {getFileType(v.pathname, v.url)}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -259,6 +280,9 @@ export default function Home() {
                       {deletingArchiveUrl === archive.url ? "Suppression..." : "Supprimer"}
                     </button>
                   </div>
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Ajouté le {formatAddedDate(archive.createdAt)} &bull; Type: {getFileType(archive.pathname, archive.url)}
+                  </p>
                 </div>
               ))}
             </div>
