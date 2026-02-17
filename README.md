@@ -20,6 +20,21 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Large video uploads on Vercel
+
+This project now uses **client-side direct uploads to Vercel Blob** for videos.
+The video file no longer goes through a Next.js serverless function body, which avoids the `413 FUNCTION_PAYLOAD_TOO_LARGE` limit (~4.5MB).
+
+Required environment variables:
+
+- `BLOB_READ_WRITE_TOKEN` (Vercel Blob RW token)
+- `UPLOAD_TOKEN` (must equal `afa03c1d-ff92-4aae-b25d-ebbc53475fbb` for the protected upload route)
+
+Optional size configuration:
+
+- `MAX_VIDEO_SIZE_MB` (server-side hard limit for generated upload token, default: `1024`)
+- `NEXT_PUBLIC_MAX_VIDEO_SIZE_MB` (client-side validation/display limit, default: `1024`)
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

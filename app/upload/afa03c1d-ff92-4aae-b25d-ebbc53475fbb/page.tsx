@@ -1,6 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
+import { upload as uploadToBlob } from "@vercel/blob/client";
+
+const MAX_SIZE_BYTES =
+  Number(process.env.NEXT_PUBLIC_MAX_VIDEO_SIZE_MB ?? "1024") * 1024 * 1024;
 
 export default function Upload() {
   const [file, setFile] = useState<File | null>(null);
@@ -10,12 +15,12 @@ export default function Upload() {
   const [done, setDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const MAX_SIZE = 50 * 1024 * 1024;
-
   const handleFile = useCallback((f: File) => {
     setError("");
-    if (f.size > MAX_SIZE) {
-      setError("Le fichier dépasse la limite de 50 Mo.");
+    if (f.size > MAX_SIZE_BYTES) {
+      setError(
+        `Le fichier dépasse la limite de ${Math.round(MAX_SIZE_BYTES / (1024 * 1024))} Mo.`
+      );
       return;
     }
     setFile(f);
@@ -44,37 +49,20 @@ export default function Upload() {
     setError("");
     setProgress(0);
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/upload/afa03c1d-ff92-4aae-b25d-ebbc53475fbb");
+      await uploadToBlob(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/upload/afa03c1d-ff92-4aae-b25d-ebbc53475fbb",
+        multipart: true,
+        onUploadProgress: ({ percentage }) => {
+          setProgress(Math.round(percentage));
+        },
+      });
 
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          setProgress(Math.round((e.loaded / e.total) * 100));
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          setDone(true);
-          setProgress(100);
-        } else {
-          setError("Échec de l'upload. Réessayez.");
-          setProgress(null);
-        }
-      };
-
-      xhr.onerror = () => {
-        setError("Erreur réseau. Vérifiez votre connexion.");
-        setProgress(null);
-      };
-
-      xhr.send(formData);
+      setDone(true);
+      setProgress(100);
     } catch {
-      setError("Une erreur est survenue.");
+      setError("Échec de l'upload. Réessayez.");
       setProgress(null);
     }
   }, [file]);
@@ -92,7 +80,7 @@ export default function Upload() {
       {/* header */}
       <header className="border-b border-zinc-800 px-6 py-4">
         <div className="mx-auto flex max-w-2xl items-center gap-3">
-          <a
+          <Link
             href="/"
             className="text-zinc-400 transition hover:text-zinc-100"
           >
@@ -109,7 +97,7 @@ export default function Upload() {
             >
               <path d="m15 18-6-6 6-6" />
             </svg>
-          </a>
+          </Link>
           <h1 className="text-lg font-semibold tracking-tight">
             Upload vidéo
           </h1>
@@ -150,12 +138,12 @@ export default function Upload() {
               >
                 Uploader une autre
               </button>
-              <a
+              <Link
                 href="/"
                 className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
               >
                 Voir les vidéos
-              </a>
+              </Link>
             </div>
           </div>
         ) : (
@@ -203,7 +191,7 @@ export default function Upload() {
                   Glissez votre vidéo ici ou <span className="text-indigo-400">parcourir</span>
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Formats vidéo &bull; Max 50 Mo
+                  Formats vidéo &bull; Max {Math.round(MAX_SIZE_BYTES / (1024 * 1024))} Mo
                 </p>
               </div>
               <input

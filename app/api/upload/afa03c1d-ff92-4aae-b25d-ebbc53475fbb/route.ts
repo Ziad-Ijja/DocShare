@@ -1,52 +1,65 @@
-import { put, del, list } from "@vercel/blob";
+import { del, list } from "@vercel/blob";
+import { handleUpload } from "@vercel/blob/client";
 import { getRedis } from "@/app/lib/redis";
+
+export const runtime = "nodejs";
+
+const ROUTE_TOKEN = "afa03c1d-ff92-4aae-b25d-ebbc53475fbb";
+const MAX_VIDEO_SIZE_MB = Number(process.env.MAX_VIDEO_SIZE_MB ?? "1024");
 
 export async function POST(req: Request) {
 
-  if ("afa03c1d-ff92-4aae-b25d-ebbc53475fbb" !== process.env.UPLOAD_TOKEN) {
+  if (ROUTE_TOKEN !== process.env.UPLOAD_TOKEN) {
     return new Response("Forbidden", { status: 403 });
   }
 
-  const form = await req.formData();
-  const file = form.get("file") as File;
-
-  if (!file) {
-    return Response.json({ error: "no file" }, { status: 400 });
-  }
-
-  // upload blob
-  const blob = await put(crypto.randomUUID()+".mp4", file, {
-    access: "public"
-  });
-
-  // Source of truth: Blob storage
-  // Keep only the 3 most recent videos and delete older ones from Blob.
-  const { blobs } = await list();
-  const videos = blobs
-    .filter((b) => /\.(mp4|mov|webm|mkv|avi)$/i.test(b.pathname))
-    .sort(
-      (a, b) =>
-        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-    );
-
-  const kept = videos.slice(0, 3).map((b) => ({
-    url: b.url,
-    createdAt: new Date(b.uploadedAt).getTime(),
-    size: b.size,
-  }));
-
-  const toDelete = videos.slice(3);
-  for (const old of toDelete) {
-    await del(old.url);
-  }
-
-  // Best effort: sync cache in Redis if available
+  let body: unknown;
   try {
-    const redis = await getRedis();
-    await redis.set("videos", JSON.stringify(kept));
-  } catch (e) {
-    console.error("Redis sync error:", e);
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  return Response.json({ url: blob.url });
+  try {
+    const jsonResponse = await handleUpload({
+      request: req,
+      body: body as Parameters<typeof handleUpload>[0]["body"],
+      onBeforeGenerateToken: async () => ({
+        allowedContentTypes: ["video/*"],
+        maximumSizeInBytes: MAX_VIDEO_SIZE_MB * 1024 * 1024,
+        addRandomSuffix: true,
+      }),
+      onUploadCompleted: async () => {
+        const { blobs } = await list();
+        const videos = blobs
+          .filter((b) => /\.(mp4|mov|webm|mkv|avi)$/i.test(b.pathname))
+          .sort(
+            (a, b) =>
+              new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+          );
+
+        const kept = videos.slice(0, 3).map((b) => ({
+          url: b.url,
+          createdAt: new Date(b.uploadedAt).getTime(),
+          size: b.size,
+        }));
+
+        for (const old of videos.slice(3)) {
+          await del(old.url);
+        }
+
+        try {
+          const redis = await getRedis();
+          await redis.set("videos", JSON.stringify(kept));
+        } catch (e) {
+          console.error("Redis sync error:", e);
+        }
+      },
+    });
+
+    return Response.json(jsonResponse);
+  } catch (error) {
+    console.error("handleUpload error:", error);
+    return Response.json({ error: "Upload handler failed" }, { status: 400 });
+  }
 }
