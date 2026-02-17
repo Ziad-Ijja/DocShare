@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { upload as uploadToBlob } from "@vercel/blob/client";
 
 const MAX_SIZE_BYTES =
@@ -11,12 +12,52 @@ const VIDEO_EXT = /\.(mp4|mov|webm|mkv|avi)$/i;
 const ARCHIVE_EXT = /\.(zip|rar)$/i;
 
 export default function Upload() {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch("/api/upload-auth")
+      .then((res) => res.json())
+      .then((data: { authorized?: boolean }) => {
+        setIsAuthorized(Boolean(data.authorized));
+        setAuthLoading(false);
+      })
+      .catch(() => {
+        setAuthLoading(false);
+      });
+  }, []);
+
+  const submitPassword = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+
+    try {
+      const res = await fetch("/api/upload-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+
+      if (!res.ok) {
+        router.replace("/");
+        return;
+      }
+
+      setIsAuthorized(true);
+      setPassword("");
+    } catch {
+      setAuthError("Une erreur est survenue. Réessayez.");
+    }
+  }, [password, router]);
 
   const handleFile = useCallback((f: File) => {
     setError("");
@@ -85,6 +126,45 @@ export default function Upload() {
     if (inputRef.current) inputRef.current.value = "";
   };
 
+  if (authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-100 px-6">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-indigo-500" />
+      </main>
+    );
+  }
+
+  if (!isAuthorized) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-100 px-6">
+        <form
+          onSubmit={submitPassword}
+          className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6"
+        >
+          <h1 className="text-lg font-semibold tracking-tight">Accès protégé</h1>
+          <p className="mt-2 text-sm text-zinc-400">Entrez le mot de passe pour accéder à l&apos;upload.</p>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="mt-4 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none transition focus:border-indigo-500"
+            placeholder="Mot de passe"
+            required
+          />
+          {authError && (
+            <p className="mt-3 text-sm text-red-400">{authError}</p>
+          )}
+          <button
+            type="submit"
+            className="mt-4 w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+          >
+            Continuer
+          </button>
+        </form>
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
       {/* header */}
@@ -108,9 +188,7 @@ export default function Upload() {
               <path d="m15 18-6-6 6-6" />
             </svg>
           </Link>
-          <h1 className="text-lg font-semibold tracking-tight">
-            Upload vidéo
-          </h1>
+          <h1 className="text-lg font-semibold tracking-tight">Upload fichier</h1>
         </div>
       </header>
 
