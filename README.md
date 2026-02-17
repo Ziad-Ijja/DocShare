@@ -34,6 +34,8 @@ Optional size configuration:
 
 - `MAX_VIDEO_SIZE_MB` (server-side hard limit for generated upload token, default: `1024`)
 - `NEXT_PUBLIC_MAX_VIDEO_SIZE_MB` (client-side validation/display limit, default: `1024`)
+- `MAX_ARCHIVE_SIZE_MB` (server-side hard limit for archives, default: `1024`)
+- `BLOB_CACHE_MAX_AGE_SECONDS` (browser/CDN cache duration for uploaded files, default: `604800` = 7 days)
 
 ## Learn More
 

@@ -2,6 +2,15 @@ import { getRedis } from "@/app/lib/redis";
 import { del, list } from "@vercel/blob";
 
 const VIDEO_PATH = /^videos\/.+\.(mp4|mov|webm|mkv|avi)$/i;
+const AUTH_COOKIE_NAME = "docshare_upload_auth";
+
+function hasUploadAuthCookie(req: Request) {
+  const cookieHeader = req.headers.get("cookie") ?? "";
+  return cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .some((part) => part === `${AUTH_COOKIE_NAME}=1`);
+}
 
 export async function GET() {
   try {
@@ -38,9 +47,19 @@ export async function GET() {
 
 export async function DELETE(req: Request) {
   try {
-    const { url } = (await req.json()) as { url?: string };
+    const body = (await req.json()) as { url?: string; password?: string };
+    const { url, password } = body;
+
     if (!url) {
       return Response.json({ error: "Missing url" }, { status: 400 });
+    }
+
+    const authenticatedByCookie = hasUploadAuthCookie(req);
+    if (!authenticatedByCookie) {
+      const expectedPassword = process.env.UPLOAD_PAGE_PASSWORD;
+      if (!expectedPassword || password !== expectedPassword) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
     }
 
     await del(url);

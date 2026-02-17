@@ -7,6 +7,9 @@ export const runtime = "nodejs";
 const ROUTE_TOKEN = "afa03c1d-ff92-4aae-b25d-ebbc53475fbb";
 const MAX_VIDEO_SIZE_MB = Number(process.env.MAX_VIDEO_SIZE_MB ?? "1024");
 const MAX_ARCHIVE_SIZE_MB = Number(process.env.MAX_ARCHIVE_SIZE_MB ?? "1024");
+const BLOB_CACHE_MAX_AGE_SECONDS = Number(
+  process.env.BLOB_CACHE_MAX_AGE_SECONDS ?? `${60 * 60 * 24 * 7}`
+);
 
 const VIDEO_PATH = /^videos\/.+\.(mp4|mov|webm|mkv|avi)$/i;
 const ARCHIVE_PATH = /^archives\/.+\.(zip|rar)$/i;
@@ -34,6 +37,7 @@ export async function POST(req: Request) {
             allowedContentTypes: ["video/*"],
             maximumSizeInBytes: MAX_VIDEO_SIZE_MB * 1024 * 1024,
             addRandomSuffix: true,
+            cacheControlMaxAge: BLOB_CACHE_MAX_AGE_SECONDS,
           };
         }
 
@@ -41,6 +45,7 @@ export async function POST(req: Request) {
           return {
             maximumSizeInBytes: MAX_ARCHIVE_SIZE_MB * 1024 * 1024,
             addRandomSuffix: true,
+            cacheControlMaxAge: BLOB_CACHE_MAX_AGE_SECONDS,
           };
         }
 

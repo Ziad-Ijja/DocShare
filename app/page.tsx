@@ -72,23 +72,38 @@ export default function Home() {
     setDeletingVideoUrl(url);
 
     try {
-      const res = await fetch("/api/video", {
+      let res = await fetch("/api/video", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
 
+      if (res.status === 401) {
+        const password = window.prompt("Mot de passe requis pour supprimer cette vidéo :");
+        if (!password) {
+          setDeletingVideoUrl(null);
+          return;
+        }
+
+        res = await fetch("/api/video", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, password }),
+        });
+      }
+
       if (!res.ok) {
         throw new Error("Delete video failed");
       }
 
-      await loadData();
+      const updatedVideos = (await res.json()) as VideoItem[];
+      setVideos(updatedVideos);
     } catch {
       setActionError("Impossible de supprimer la vidéo.");
     } finally {
       setDeletingVideoUrl(null);
     }
-  }, [loadData]);
+  }, []);
 
   const deleteArchive = useCallback(async (url: string) => {
     const confirmed = window.confirm("Supprimer cette archive ?");
@@ -98,23 +113,38 @@ export default function Home() {
     setDeletingArchiveUrl(url);
 
     try {
-      const res = await fetch("/api/archive", {
+      let res = await fetch("/api/archive", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
 
+      if (res.status === 401) {
+        const password = window.prompt("Mot de passe requis pour supprimer cette archive :");
+        if (!password) {
+          setDeletingArchiveUrl(null);
+          return;
+        }
+
+        res = await fetch("/api/archive", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, password }),
+        });
+      }
+
       if (!res.ok) {
         throw new Error("Delete archive failed");
       }
 
-      await loadData();
+      const updatedArchives = (await res.json()) as ArchiveItem[];
+      setArchives(updatedArchives);
     } catch {
       setActionError("Impossible de supprimer l'archive.");
     } finally {
       setDeletingArchiveUrl(null);
     }
-  }, [loadData]);
+  }, []);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -194,6 +224,7 @@ export default function Home() {
                 >
                   <video
                     controls
+                    preload="metadata"
                     className="aspect-video w-full bg-black object-contain"
                   >
                     <source src={v.url} />
