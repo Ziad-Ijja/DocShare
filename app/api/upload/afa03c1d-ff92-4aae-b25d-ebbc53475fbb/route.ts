@@ -19,46 +19,33 @@ export async function POST(req: Request) {
     access: "public"
   });
 
+  // Source of truth: Blob storage
+  // Keep only the 3 most recent videos and delete older ones from Blob.
+  const { blobs } = await list();
+  const videos = blobs
+    .filter((b) => /\.(mp4|mov|webm|mkv|avi)$/i.test(b.pathname))
+    .sort(
+      (a, b) =>
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    );
+
+  const kept = videos.slice(0, 3).map((b) => ({
+    url: b.url,
+    createdAt: new Date(b.uploadedAt).getTime(),
+    size: b.size,
+  }));
+
+  const toDelete = videos.slice(3);
+  for (const old of toDelete) {
+    await del(old.url);
+  }
+
+  // Best effort: sync cache in Redis if available
   try {
     const redis = await getRedis();
-    const raw = await redis.get("videos");
-    const videos: Array<{ url: string; createdAt: number; size: number }> = raw ? JSON.parse(raw) : [];
-
-    videos.push({
-      url: blob.url,
-      createdAt: Date.now(),
-      size: file.size
-    });
-
-    // quota = 3 vidéos max
-    while (videos.length > 3) {
-      const old = videos.shift();
-      if (old) {
-        await del(old.url);
-      }
-    }
-
-    await redis.set("videos", JSON.stringify(videos));
+    await redis.set("videos", JSON.stringify(kept));
   } catch (e) {
-    console.error("Redis error:", e);
-
-    // Fallback: enforce quota directly from Blob storage
-    try {
-      const { blobs } = await list();
-      const videos = blobs
-        .filter((b) => /\.(mp4|mov|webm|mkv|avi)$/i.test(b.pathname))
-        .sort(
-          (a, b) =>
-            new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-        );
-
-      const toDelete = videos.slice(3);
-      for (const old of toDelete) {
-        await del(old.url);
-      }
-    } catch (cleanupError) {
-      console.error("Blob cleanup fallback error:", cleanupError);
-    }
+    console.error("Redis sync error:", e);
   }
 
   return Response.json({ url: blob.url });
